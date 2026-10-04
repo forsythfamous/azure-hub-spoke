@@ -1,0 +1,137 @@
+# GATE -> COMMIT — on merge to main:
+#   1. plan (read-only identity) and publish it to the run summary;
+#   2. the `production` environment pauses the run for a required reviewer;
+#   3. apply (write identity, only available inside that environment)
+#      re-plans under a state lock and applies only if the plan fingerprint
+#      matches the one the reviewer approved.
+name: apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "envs/**"
+      - "modules/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One state, one writer: never run apply and destroy concurrently, never
+# cancel a run that may be holding the state lock.
+concurrency:
+  group: terraform-state-dev
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: "1.16.5"
+  TF_DIR: envs/dev
+  TF_IN_AUTOMATION: "true"
+  ARM_USE_OIDC: "true"
+  ARM_USE_AZUREAD: "true"
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_owner: ${{ vars.TF_VAR_OWNER }}
+  TF_VAR_repository: ${{ github.server_url }}/${{ github.repository }}
+  TF_VAR_vm_admin_ssh_public_key: ${{ vars.TF_VAR_VM_ADMIN_SSH_PUBLIC_KEY }}
+  TF_VAR_budget_contact_emails: ${{ vars.TF_VAR_BUDGET_CONTACT_EMAILS }}
+  TF_VAR_enable_firewall: ${{ vars.TF_VAR_ENABLE_FIREWALL || 'false' }}
+
+jobs:
+  plan:
+    name: plan (dev)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      has_changes: ${{ steps.summary.outputs.has_changes }}
+      fingerprint: ${{ steps.summary.outputs.fingerprint }}
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_PLAN_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/terraform-init
+        with:
+          client-id: ${{ secrets.AZURE_PLAN_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          working-directory: ${{ env.TF_DIR }}
+          terraform-version: ${{ env.TF_VERSION }}
+          state-resource-group: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          state-storage-account: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          state-container: ${{ vars.TFSTATE_CONTAINER }}
+          state-key: ${{ vars.TFSTATE_KEY }}
+
+      - name: terraform plan
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform plan -input=false -lock=false -out=tfplan
+
+      - name: summarise plan
+        id: summary
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          "$GITHUB_WORKSPACE/.github/scripts/plan-summary.sh" tfplan "Plan for approval: dev"
+          cat plan-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: apply (dev)
+    needs: plan
+    if: needs.plan.outputs.has_changes == 'true'
+    runs-on: ubuntu-24.04
+    # Required reviewers + "main only" deployment branch policy are set on
+    # the environment. AZURE_APPLY_CLIENT_ID is an *environment* secret, so
+    # the write identity is unreachable outside an approved run.
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_APPLY_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/terraform-init
+        with:
+          client-id: ${{ secrets.AZURE_APPLY_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          working-directory: ${{ env.TF_DIR }}
+          terraform-version: ${{ env.TF_VERSION }}
+          state-resource-group: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          state-storage-account: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          state-container: ${{ vars.TFSTATE_CONTAINER }}
+          state-key: ${{ vars.TFSTATE_KEY }}
+
+      - name: re-plan under lock
+        id: summary
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform plan -input=false -lock-timeout=10m -out=tfplan
+          "$GITHUB_WORKSPACE/.github/scripts/plan-summary.sh" tfplan "Applied plan: dev"
+
+      - name: verify plan matches the approved plan
+        env:
+          APPROVED: ${{ needs.plan.outputs.fingerprint }}
+          CURRENT: ${{ steps.summary.outputs.fingerprint }}
+        run: |
+          if [ "$APPROVED" != "$CURRENT" ]; then
+            echo "::error::Plan changed since approval (approved $APPROVED, now $CURRENT). Re-run the workflow to review the new plan."
+            exit 1
+          fi
+          echo "Plan fingerprint matches the approved plan: $CURRENT"
+
+      - name: terraform apply
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform apply -input=false -lock-timeout=10m tfplan
+
+      - name: record outputs
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          {
+            echo "### Outputs"
+            echo '```json'
+            terraform output -json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,60 @@
+name: terraform-init
+description: Install Terraform, sign in to Azure with OIDC and initialise the azurerm backend.
+
+inputs:
+  client-id:
+    description: Entra ID application (client) ID of the identity for this job.
+    required: true
+  tenant-id:
+    description: Entra ID tenant ID.
+    required: true
+  subscription-id:
+    description: Target subscription ID.
+    required: true
+  working-directory:
+    description: Terraform root module.
+    required: true
+  terraform-version:
+    description: Terraform CLI version.
+    required: true
+  state-resource-group:
+    description: Resource group of the state storage account.
+    required: true
+  state-storage-account:
+    description: State storage account name.
+    required: true
+  state-container:
+    description: State blob container.
+    required: true
+  state-key:
+    description: State blob name.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false
+
+    # Federated credential exchange: GitHub issues a short-lived OIDC token
+    # whose subject (pull_request / ref / environment) must match a federated
+    # credential on the app registration. No client secret exists anywhere.
+    - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+
+    - name: terraform init
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        terraform init -input=false \
+          -backend-config="resource_group_name=${{ inputs.state-resource-group }}" \
+          -backend-config="storage_account_name=${{ inputs.state-storage-account }}" \
+          -backend-config="container_name=${{ inputs.state-container }}" \
+          -backend-config="key=${{ inputs.state-key }}" \
+          -backend-config="use_azuread_auth=true" \
+          -backend-config="use_oidc=true"
