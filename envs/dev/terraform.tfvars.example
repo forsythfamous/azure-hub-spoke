@@ -1,0 +1,37 @@
+# Copy to terraform.tfvars (git-ignored) for local runs. CI passes the same
+# values through TF_VAR_* repository variables.
+
+# subscription_id = "00000000-0000-0000-0000-000000000000"
+location = "polandcentral"
+zones    = ["1", "2", "3"]
+
+workload    = "hubspoke"
+environment = "dev"
+owner       = "platform-team"
+repository  = "github.com/<owner>/azure-hub-spoke"
+extra_tags = {
+  cost-center = "platform"
+}
+
+# Azure Firewall: +~USD 915/month (Standard) or +~USD 290/month (Basic).
+enable_firewall   = false
+firewall_sku_tier = "Standard"
+
+waf_mode                 = "Prevention"
+waf_admin_allowed_cidrs  = [] # e.g. ["198.51.100.10/32"]
+waf_rate_limit_threshold = 100
+app_gateway_dns_label    = null # e.g. "hubspoke-dev-<suffix>"
+
+deploy_backend_vm       = true
+vm_size                 = "Standard_B2ats_v2"
+vm_admin_ssh_public_key = "ssh-ed25519 AAAA... you@host"
+
+storage_replication_type = "LRS"
+
+log_daily_quota_gb = 1
+monthly_budgets = {
+  hub      = 50
+  workload = 100
+  data     = 20
+}
+budget_contact_emails = ["ops@example.com"]

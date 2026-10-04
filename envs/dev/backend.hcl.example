@@ -1,0 +1,13 @@
+# Copy to backend.hcl (git-ignored) and run:
+#   terraform init -backend-config=backend.hcl
+# The state storage account is bootstrapped once, outside this configuration
+# (see README > Remote state). Shared-key access on it should be disabled.
+resource_group_name  = "rg-tfstate-plc"
+storage_account_name = "sttfstateXXXXXX"
+container_name       = "tfstate"
+key                  = "azure-hub-spoke/dev.tfstate"
+use_azuread_auth     = true
+
+# Locally: authenticate with `az login` (use_cli is the default).
+# In GitHub Actions the workflow sets ARM_USE_OIDC=true and ARM_CLIENT_ID /
+# ARM_TENANT_ID / ARM_SUBSCRIPTION_ID instead.

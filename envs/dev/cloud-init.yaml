@@ -1,0 +1,31 @@
+#cloud-config
+# Minimal HTTP backend for the Application Gateway health probe and WAF
+# verification. Uses the Python interpreter shipped with the image, so it
+# needs no package downloads (the subnet has no default outbound access).
+write_files:
+  - path: /srv/www/index.html
+    permissions: "0644"
+    content: |
+      backend ok
+  - path: /etc/systemd/system/backend-http.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Static HTTP backend for Application Gateway
+      After=network-online.target
+
+      [Service]
+      ExecStart=/usr/bin/python3 -m http.server 80 --directory /srv/www
+      DynamicUser=yes
+      AmbientCapabilities=CAP_NET_BIND_SERVICE
+      NoNewPrivileges=yes
+      ProtectSystem=strict
+      ProtectHome=yes
+      PrivateTmp=yes
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+runcmd:
+  - systemctl daemon-reload
+  - systemctl enable --now backend-http.service
