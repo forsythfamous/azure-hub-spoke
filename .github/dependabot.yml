@@ -8,3 +8,7 @@ updates:
     directories: ["/envs/dev"]
     schedule:
       interval: weekly
+    ignore:
+      # azurerm major versions change resource schemas; upgrade deliberately (see README).
+      - dependency-name: hashicorp/azurerm
+        update-types: ["version-update:semver-major"]
