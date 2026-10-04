@@ -1,0 +1,27 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.tfstate.lock.info
+
+# Local inputs (examples are committed)
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+backend.hcl
+
+# Pipeline scratch files
+plan.json
+plan.txt
+plan-summary.md
+
+# Raw verification output is reviewed and redacted before committing
+evidence/**/raw/
