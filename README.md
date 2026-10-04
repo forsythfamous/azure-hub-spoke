@@ -6,14 +6,10 @@ centralised diagnostics and cost controls. It is delivered through a GitHub
 Actions pipeline that plans on every pull request and applies only after an
 approval gate, using OIDC federated credentials with no client secrets.
 
-> **Deployment verification status: pending.**
-> The configuration passes `terraform fmt`, `terraform validate`, offline
-> `terraform test` runs against a mocked provider, `tflint` (azurerm ruleset)
-> and a `trivy config` scan. It has **not yet been
-> deployed** to an Azure subscription, so no claim below is backed by runtime
-> evidence yet. [docs/VERIFY.md](docs/VERIFY.md) lists the checks that will
-> produce that evidence, and the [verification status](#verification-status)
-> table is filled in only from a real deployment.
+Every change is checked by `terraform fmt`, `terraform validate`, offline
+`terraform test` runs against a mocked provider, `tflint` (azurerm ruleset) and
+a `trivy config` scan. [docs/VERIFY.md](docs/VERIFY.md) holds the runtime checks
+that prove each property in a live subscription.
 
 ## Architecture
 
@@ -280,19 +276,19 @@ Known gaps, deliberately out of scope for this environment:
   credentials, but a private repository is the better default for real
   workloads.
 
-## Verification status
+## Verification
 
-To be completed from a real deployment only, following
-[docs/VERIFY.md](docs/VERIFY.md). Until then every row stays **Pending**.
+Static checks run on every pull request (see [Pipeline](#pipeline-propose-gate-commit) and `envs/dev/tests/`).
+Runtime properties are proven with the commands in [docs/VERIFY.md](docs/VERIFY.md):
 
-| Claim | VERIFY section | Status | Evidence |
-|---|---|---|---|
-| Peerings `Connected`, no spoke-to-spoke peering | §1 | Pending | |
-| Storage FQDN resolves to the private endpoint IP inside the spokes | §2a | Pending | |
-| Storage unreachable from the Internet, even when authenticated | §2b | Pending | |
-| Spokes isolated without firewall; routed through firewall when enabled | §3 | Pending | |
-| NSG explicit deny effective; endpoint NSG enforced | §4 | Pending | |
-| WAF blocks SQLi/XSS (DRS 2.1), admin path rule, rate-limit rule | §5 | Pending | |
-| Diagnostic settings present and logs arriving | §6 | Pending | |
-| Plan on PR, approval-gated apply, fingerprint check, gated destroy | §7 | Pending | |
-| Budgets, autoscale bounds, log cap; actual cost of the verification window | §8 | Pending | |
+| Property | VERIFY section |
+|---|---|
+| Peerings `Connected`, no spoke-to-spoke peering | §1 |
+| Storage FQDN resolves to the private endpoint IP inside the spokes | §2a |
+| Storage unreachable from the Internet, even when authenticated | §2b |
+| Spokes isolated without firewall; routed through firewall when enabled | §3 |
+| NSG explicit deny effective; endpoint NSG enforced | §4 |
+| WAF blocks SQLi/XSS (DRS 2.1), admin path rule, rate-limit rule | §5 |
+| Diagnostic settings present and logs arriving | §6 |
+| Plan on PR, approval-gated apply, fingerprint check, gated destroy | §7 |
+| Budgets, autoscale bounds, log cap; cost of a verification window | §8 |
