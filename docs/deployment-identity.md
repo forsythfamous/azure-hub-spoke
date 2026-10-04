@@ -130,3 +130,9 @@ Branch protection on `main`: require pull requests and the
 
 Tenant ID, subscription ID and client IDs are identifiers, not credentials.
 They are stored as secrets so they stay out of logs.
+
+## Enabling Azure in CI
+
+Until a subscription is connected, pull requests run only the static checks (fmt, validate, tflint, trivy and the
+mocked `terraform test` suite), and pushes to `main` do not plan or apply. After the identities, state storage and
+secrets above are in place, set the repository variable `AZURE_ENABLED` to `true` to turn on plan and apply.

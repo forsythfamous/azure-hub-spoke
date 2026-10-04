@@ -83,7 +83,9 @@ jobs:
     name: plan (dev)
     needs: static
     # Fork PRs get no secrets and no OIDC token; static checks still run.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Plans need a subscription; until the repository variable AZURE_ENABLED is
+    # 'true', pull requests run only the static checks and the mocked tests.
+    if: vars.AZURE_ENABLED == 'true' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     permissions:
       contents: read

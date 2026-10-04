@@ -39,6 +39,8 @@ env:
 
 jobs:
   plan:
+    # No-op until a subscription is connected (repository variable AZURE_ENABLED).
+    if: vars.AZURE_ENABLED == 'true'
     name: plan (dev)
     runs-on: ubuntu-24.04
     permissions:
